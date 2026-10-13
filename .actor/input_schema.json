@@ -1,0 +1,89 @@
+{
+  "title": "Company Jobs API input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "companies": {
+      "title": "Companies",
+      "type": "array",
+      "editor": "stringList",
+      "description": "One per line: a careers page URL (boards.greenhouse.io/stripe, jobs.lever.co/spotify, jobs.ashbyhq.com/notion, apply.workable.com/huggingface, jobs.smartrecruiters.com/BoschGroup, acme.recruitee.com, acme.jobs.personio.de), a domain (notion.so) or a company name (Stripe). URLs are exact; domains and names are matched by trying the company's slug on every supported ATS.",
+      "prefill": [
+        "https://boards.greenhouse.io/stripe",
+        "notion.so",
+        "https://apply.workable.com/huggingface/"
+      ],
+      "default": [
+        "https://boards.greenhouse.io/stripe"
+      ]
+    },
+    "titleKeywords": {
+      "title": "Title contains any of",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Keep jobs whose title contains at least one of these words (case-insensitive), e.g. engineer, data, sales. Empty keeps all. Filtered-out jobs are free.",
+      "default": []
+    },
+    "locationKeywords": {
+      "title": "Location contains any of",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Keep jobs whose location or country contains one of these, e.g. Berlin, Germany, London, Remote. Empty keeps all.",
+      "default": []
+    },
+    "remoteOnly": {
+      "title": "Remote jobs only",
+      "type": "boolean",
+      "description": "Keep only jobs the ATS marks as remote (or whose location says Remote).",
+      "default": false
+    },
+    "postedWithinDays": {
+      "title": "Posted within the last N days",
+      "type": "integer",
+      "minimum": 0,
+      "description": "0 keeps all. Jobs without a publish date are kept.",
+      "default": 0
+    },
+    "onlyNewJobs": {
+      "title": "Only jobs not seen in earlier runs (monitor mode)",
+      "type": "boolean",
+      "description": "Remembers job IDs per board in a key-value store named ats-jobs-seen in your account. Schedule the Actor daily and get only new postings, so you pay only for new jobs.",
+      "default": false
+    },
+    "includeDescription": {
+      "title": "Include job description",
+      "type": "boolean",
+      "description": "Full description as HTML and plain text. Turn off for smaller, faster output.",
+      "default": true
+    },
+    "maxJobsPerCompany": {
+      "title": "Max jobs per company",
+      "type": "integer",
+      "minimum": 0,
+      "description": "0 means no limit. Caps the jobs (and the cost) per company after filters.",
+      "default": 0
+    },
+    "atsSystems": {
+      "title": "Only try these ATS (for names and domains)",
+      "type": "array",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "greenhouse",
+          "lever",
+          "ashby",
+          "workable",
+          "smartrecruiters",
+          "recruitee",
+          "personio"
+        ]
+      },
+      "description": "Limit auto-detection to some systems. Empty tries all seven. Ignored for careers page URLs.",
+      "default": []
+    }
+  },
+  "required": [
+    "companies"
+  ]
+}
