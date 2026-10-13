@@ -78,7 +78,8 @@ class Client:
     def __init__(self, descriptions: bool = True):
         self.d = descriptions
         self.http = httpx.AsyncClient(timeout=30, follow_redirects=True,
-                                      headers={"User-Agent": "ats-jobs-apify-actor/1.0 (+https://apify.com/jordan-belfort)"})
+                                      headers={"User-Agent": "ats-jobs-apify-actor/1.0 (+https://apify.com/jordan-belfort)",
+                                               "Accept-Encoding": "gzip, deflate"})
         self.sem = asyncio.Semaphore(8)
 
     async def close(self):
@@ -126,14 +127,16 @@ class Client:
         return out
 
     async def lever(self, slug):
-        out = []
-        for host in ("api.lever.co", "api.eu.lever.co"):
+        out, jobs = [], None
+        for host in ("api.lever.co", "api.eu.lever.co"):  # EU-hosted boards answer [] or 404 on the US API
             r = await self.get(f"https://{host}/v0/postings/{slug}", params={"mode": "json"})
             if r.status_code == 200 and isinstance(r.json(), list):
-                break
-        else:
+                jobs = r.json() if not jobs else jobs
+                if jobs:
+                    break
+        if jobs is None:
             return None
-        for j in r.json():
+        for j in jobs:
             c = j.get("categories") or {}
             s = j.get("salaryRange") or {}
             desc = (j.get("description") or "") + "".join(
