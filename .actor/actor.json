@@ -1,0 +1,88 @@
+{
+  "actorSpecification": 1,
+  "name": "ats-jobs-api",
+  "title": "Company Jobs API: Greenhouse, Lever, Ashby & 4 more",
+  "version": "0.1",
+  "buildTag": "latest",
+  "input": "./input_schema.json",
+  "dockerfile": "../Dockerfile",
+  "output": "./output_schema.json",
+  "storages": {
+    "dataset": {
+      "actorSpecification": 1,
+      "views": {
+        "jobs": {
+          "title": "Jobs",
+          "transformation": {
+            "fields": [
+              "company",
+              "title",
+              "location",
+              "department",
+              "employmentType",
+              "workplaceType",
+              "salaryMin",
+              "salaryMax",
+              "salaryCurrency",
+              "url",
+              "publishedAt",
+              "ats",
+              "error",
+              "input"
+            ]
+          },
+          "display": {
+            "component": "table",
+            "properties": {
+              "company": {
+                "label": "Company"
+              },
+              "title": {
+                "label": "Job title"
+              },
+              "location": {
+                "label": "Location"
+              },
+              "department": {
+                "label": "Department"
+              },
+              "employmentType": {
+                "label": "Type"
+              },
+              "workplaceType": {
+                "label": "Workplace"
+              },
+              "salaryMin": {
+                "label": "Salary min",
+                "format": "number"
+              },
+              "salaryMax": {
+                "label": "Salary max",
+                "format": "number"
+              },
+              "salaryCurrency": {
+                "label": "Currency"
+              },
+              "url": {
+                "label": "Job page",
+                "format": "link"
+              },
+              "publishedAt": {
+                "label": "Published"
+              },
+              "ats": {
+                "label": "ATS"
+              },
+              "error": {
+                "label": "Error"
+              },
+              "input": {
+                "label": "Your input"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
