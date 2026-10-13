@@ -50,6 +50,13 @@
       "description": "Remembers job IDs per board in a key-value store named ats-jobs-seen in your account. Schedule the Actor daily and get only new postings, so you pay only for new jobs.",
       "default": false
     },
+    "monitorName": {
+      "title": "Monitor name",
+      "type": "string",
+      "editor": "textfield",
+      "description": "Only for monitor mode. Runs with the same name share their memory of seen jobs; give each separate watch list its own name.",
+      "default": "default"
+    },
     "includeDescription": {
       "title": "Include job description",
       "type": "boolean",
