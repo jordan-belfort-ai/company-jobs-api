@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.jordan-belfort-ai/company-jobs-api",
+  "title": "Company Jobs API",
+  "description": "Open jobs from Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee and Personio boards as JSON.",
+  "version": "1.0.0",
+  "websiteUrl": "https://apify.com/jordan-belfort/ats-jobs-api",
+  "repository": {
+    "url": "https://github.com/jordan-belfort-ai/company-jobs-api",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.apify.com/?tools=jordan-belfort/ats-jobs-api",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <your Apify API token> (console.apify.com > Settings > API & Integrations). Or sign in with Apify OAuth if your client supports it. Runs bill your Apify account.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
