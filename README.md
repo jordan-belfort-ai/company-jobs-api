@@ -102,6 +102,12 @@ permissions, so a prepaid token works:
 
     POST https://api.apify.com/v2/acts/jordan-belfort~ats-jobs-api/run-sync-get-dataset-items
 
+## The raw endpoints
+
+Want to call the ATS APIs yourself? [Public job board APIs of seven ATS](https://jordan-belfort-ai.github.io/ats-job-board-apis/)
+lists every endpoint this Actor uses, with curl examples, pagination, salary fields and how each one answers for an
+unknown company (tested 13 Oct 2026).
+
 ## Limits and honesty
 
 - Name and domain matching is a guess: if two companies share a slug the wrong board can come back. Check the
