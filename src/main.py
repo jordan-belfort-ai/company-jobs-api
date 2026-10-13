@@ -61,6 +61,7 @@ async def main() -> None:
              "since": datetime.now(timezone.utc) - timedelta(days=days) if days else None}
         per_company = inp.get("maxJobsPerCompany") or 0
         only_new = inp.get("onlyNewJobs", False)
+        monitor = re.sub(r"[^a-zA-Z0-9-]", "-", inp.get("monitorName") or "default")[:40]
         only = [a for a in inp.get("atsSystems") or [] if a in ATS]
         seen_store = await Actor.open_key_value_store(name="ats-jobs-seen") if only_new else None
         client = Client(descriptions=inp.get("includeDescription", True))
@@ -89,7 +90,7 @@ async def main() -> None:
                     by_board.setdefault(f"{r['ats']}-{r['boardSlug']}".lower(), []).append(r)
                 fresh = []
                 for key, rs in by_board.items():
-                    key = re.sub(r"[^a-zA-Z0-9!\-_.'()]", "_", key)[:250]
+                    key = re.sub(r"[^a-zA-Z0-9!\-_.'()]", "_", f"{monitor}-{key}")[:250]
                     old = set(await seen_store.get_value(key) or [])
                     fresh += [r for r in rs if r["jobId"] not in old]
                     await seen_store.set_value(key, sorted(old | {r["jobId"] for r in rs}))
