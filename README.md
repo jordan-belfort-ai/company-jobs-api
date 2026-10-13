@@ -29,6 +29,7 @@ you only pay for jobs you haven't seen before.
 | `remoteOnly` | Only remote jobs |
 | `postedWithinDays` | Only jobs published in the last N days |
 | `onlyNewJobs` | Monitor mode: skip jobs returned by earlier runs |
+| `monitorName` | Separate memory per watch list in monitor mode (default `default`) |
 | `includeDescription` | Full description as HTML and text (default on) |
 | `maxJobsPerCompany` | Cap per company (0 = all) |
 | `atsSystems` | Restrict auto-detection to some ATS |
