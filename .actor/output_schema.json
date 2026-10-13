@@ -1,0 +1,11 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Company Jobs API output",
+  "properties": {
+    "jobs": {
+      "type": "string",
+      "title": "Jobs",
+      "template": "{{links.apiDefaultDatasetUrl}}/items?view=jobs"
+    }
+  }
+}
