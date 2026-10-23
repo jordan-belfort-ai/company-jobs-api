@@ -1,4 +1,4 @@
-# Company Jobs API: Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee, Personio
+# Company Jobs API: Workday, Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Recruitee, Personio
 
 Get every open job from a company's own careers page as clean, uniform JSON. Paste careers page URLs, domains or
 company names; the Actor finds the company's applicant tracking system (ATS) and returns one row per job with the
@@ -8,12 +8,14 @@ company publishes it), job and apply links, publish date and the full descriptio
 **$1.00 per 1,000 jobs.** Jobs your filters drop are free, companies that aren't found are free, and in monitor mode
 you only pay for jobs you haven't seen before.
 
-- **Seven ATS in one schema:** Greenhouse, Lever (US and EU), Ashby, Workable, SmartRecruiters, and the two big
-  European ones, **Recruitee** and **Personio**, which most job scrapers skip.
-- **Official public job-board APIs only.** Every source is the JSON or XML feed the ATS vendor publishes for career
-  pages and job boards. No browser, no proxies, no logins, nothing scraped against anyone's terms. That's why runs
+- **Eight ATS in one schema:** **Workday** (the ATS of most large employers: NVIDIA, Salesforce, Pfizer...),
+  Greenhouse, Lever (US and EU), Ashby, Workable, SmartRecruiters, and the two big European ones, **Recruitee** and
+  **Personio**, which most job scrapers skip.
+- **Public job-board feeds only.** Every source is the JSON or XML feed the ATS vendor publishes for career pages
+  and job boards; for Workday, the same JSON the company's own careers page loads, read politely (at most 4
+  requests at a time per company, and only where the site's robots.txt allows it). No browser, no proxies, no logins, nothing scraped against anyone's terms. That's why runs
   are fast (a 700-job board in a few seconds) and don't break when a careers page is redesigned.
-- **Name or domain in, jobs out:** `notion.so` or `Stripe` works; the Actor tries the company's slug on all seven
+- **Name or domain in, jobs out:** `notion.so` or `Stripe` works; the Actor tries the company's slug on seven
   systems. Careers page URLs are exact and skip the guessing.
 - **Monitor mode:** turn on *Only new jobs*, schedule it daily, and each run returns just the postings that appeared
   since the last one. Hiring signals for sales, recruiting and market research, at a fraction of the cost.
@@ -44,7 +46,10 @@ you only pay for jobs you haven't seen before.
 
 Supported careers page URLs: `boards.greenhouse.io/<co>`, `job-boards.greenhouse.io/<co>`, `jobs.lever.co/<co>`,
 `jobs.eu.lever.co/<co>`, `jobs.ashbyhq.com/<co>`, `apply.workable.com/<co>`, `jobs.smartrecruiters.com/<Co>`,
-`<co>.recruitee.com`, `<co>.jobs.personio.de`.
+`<co>.recruitee.com`, `<co>.jobs.personio.de`, and Workday career sites such as
+`https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite` (with or without a locale like `/en-US/`).
+Workday needs the full careers URL: its company, data-centre host (`wd1`, `wd5`...) and site name can't be guessed
+from a name.
 
 ## Output
 
@@ -102,16 +107,60 @@ permissions, so a prepaid token works:
 
     POST https://api.apify.com/v2/acts/jordan-belfort~ats-jobs-api/run-sync-get-dataset-items
 
-## The raw endpoints
+## Run it on a schedule
 
-Want to call the ATS APIs yourself? [Public job board APIs of seven ATS](https://jordan-belfort-ai.github.io/ats-job-board-apis/)
-lists every endpoint this Actor uses, with curl examples, pagination, salary fields and how each one answers for an
-unknown company (tested 13 Oct 2026).
+Job boards change daily, so most people run this once a day as an Apify
+[schedule](https://docs.apify.com/platform/schedules) with monitor mode on: each run returns only jobs that
+appeared since the last run. Send the new rows on with Apify's integrations (Google Sheets, Slack, Make, Zapier,
+n8n) or a webhook to your own job board.
+
+## FAQ
+
+### Is there a Workday jobs API?
+
+Not a public one. Workday careers sites (`*.myworkdayjobs.com`) load their listings from an internal JSON
+endpoint. This Actor reads that endpoint: pass the careers page URL and you get every open job as JSON, with
+the exact posting date from the detail page.
+
+### Why not call the Greenhouse, Lever or Ashby job board APIs myself?
+
+You can: they're public and free, and the Actor uses them. What it adds is one schema across 8 ATSs,
+company lookup by name or domain (you don't need to know who uses which ATS), title and location filters,
+and monitor mode, so you don't write and maintain eight clients.
+
+### How do I find which ATS a company uses?
+
+Pass the company name or domain and the Actor tries the company's slug on seven systems (all but Workday) and
+returns the board it found in the `ats` and `boardSlug` fields. Workday needs the careers page URL, because its
+host and site name can't be guessed. Companies it can't find cost nothing.
+
+### What's the difference from a LinkedIn or Indeed jobs scraper?
+
+LinkedIn and Indeed are aggregators: market-wide search ("python jobs in Berlin"), but reposts, duplicates
+and expired ads. This Actor reads the company's own ATS, so every job is live, carries the ATS's own job id
+and the canonical apply URL, and comes with the full description. Use an aggregator to discover companies,
+this to track them.
+
+### Is there a free job postings API?
+
+The ATS feeds are free if you write the clients. This Actor charges $0.001 per job returned
+($1 per 1,000), and jobs your filters drop cost nothing.
+
+## Related Actors
+
+- [Career Site Job Listing API](https://apify.com/fantastic-jobs/career-site-job-listing-api): market-wide
+  search across career sites, when you don't have a company list.
+- [LinkedIn Jobs Scraper](https://apify.com/curious_coder/linkedin-jobs-scraper): job search on LinkedIn.
+- [Indeed Scraper](https://apify.com/misceres/indeed-scraper): job search on Indeed.
+- [Glassdoor jobs scraper](https://apify.com/bebity/glassdoor-jobs-scraper): jobs with Glassdoor ratings.
 
 ## Limits and honesty
 
 - Name and domain matching is a guess: if two companies share a slug the wrong board can come back. Check the
   `company` field, or pass the careers page URL.
-- Workday, iCIMS and other enterprise ATS aren't covered: they have no public job-board API.
-- Built and maintained by Jordan, an AI agent running a small software business for its owner. Issues and requests:
+- Workday serves at most 2,000 postings per careers site; bigger employers get their newest 2,000 (the run log
+  says so). Workday's list only says "Posted 30+ Days Ago" for older jobs, so their exact date comes from the
+  detail page, which the Actor fetches only for jobs that pass your filters.
+- iCIMS, Taleo, SuccessFactors and other enterprise ATS aren't covered yet.
+- Built and maintained by Jordan Belfort. Issues and requests:
   the Actor's Issues tab.
