@@ -5,13 +5,17 @@ Every fetcher returns normalized rows, or None when the company has no board on 
 import asyncio
 import html
 import re
+import logging
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
+from urllib.robotparser import RobotFileParser
 
 import httpx
 
-ATS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee", "personio"]
+ATS = ["greenhouse", "lever", "ashby", "workable", "smartrecruiters", "recruitee", "personio", "workday"]
+
+log = logging.getLogger("ats-jobs")
 
 # Career-page URL patterns -> (ats, slug)
 URL_PATTERNS = [
@@ -24,6 +28,10 @@ URL_PATTERNS = [
     (r"(?:careers|jobs)\.smartrecruiters\.com/([\w.-]+)", "smartrecruiters"),
     (r"([\w-]+)\.recruitee\.com", "recruitee"),
     (r"([\w-]+)\.jobs\.personio\.(?:de|com)", "personio"),
+    # Workday: slug is 'tenant.wdN/site'; an optional locale segment such as /en-US/ is skipped
+    (r"([\w-]+\.wd\d+)\.myworkdayjobs\.com(?:/[a-z]{2}(?:-[A-Za-z]{2,4})?(?=/|$))?/?([\w.%-]*)", "workday"),
+    # The same boards on wdN.myworkdaysite.com/recruiting/{tenant}/{site}; tenant.wdN.myworkdayjobs.com serves them too
+    (r"(wd\d+)\.myworkdaysite\.com(?:/[a-z]{2}(?:-[A-Za-z]{2,4})?)?/recruiting/([\w-]+)/([\w.%-]+)", "workday-site"),
 ]
 
 
@@ -33,6 +41,10 @@ def parse_target(raw: str) -> tuple[str | None, list[str]]:
     for pat, ats in URL_PATTERNS:
         m = re.search(pat, s, re.I)
         if m and m.group(1).lower() not in {"www", "apply", "jobs", "careers", "api"}:
+            if ats == "workday":  # a bare slug can't identify a Workday board: tenant, wd host and site are all needed
+                return ats, [f"{m.group(1).lower()}/{m.group(2)}"]
+            if ats == "workday-site":
+                return "workday", [f"{m.group(2).lower()}.{m.group(1).lower()}/{m.group(3)}"]
             return ats, [m.group(1)]
     host = urlparse(s if "://" in s else "https://" + s).hostname or s
     if "." in host and " " not in s:
@@ -77,26 +89,33 @@ def _row(**kw) -> dict:
 class Client:
     def __init__(self, descriptions: bool = True):
         self.d = descriptions
+        self.wd_limit = 0  # >0: stop paging a Workday board once this many postings are in (no filters, capped run)
         self.http = httpx.AsyncClient(timeout=30, follow_redirects=True,
                                       headers={"User-Agent": "ats-jobs-apify-actor/1.0 (+https://apify.com/jordan-belfort)",
                                                "Accept-Encoding": "gzip, deflate"})
         self.sem = asyncio.Semaphore(8)
+        self.wd_sems: dict[str, asyncio.Semaphore] = {}  # Workday: at most 4 requests in flight per tenant
+        self.wd_robots: dict[str, RobotFileParser | None] = {}
 
     async def close(self):
         await self.http.aclose()
 
     async def get(self, url, **kw):
-        async with self.sem:
+        return await self.request("GET", url, **kw)
+
+    async def request(self, method, url, host_sem: asyncio.Semaphore | None = None, **kw):
+        async with host_sem or self.sem:
             for attempt in range(4):
                 try:
-                    r = await self.http.get(url, **kw)
+                    r = await self.http.request(method, url, **kw)
                 except httpx.TransportError:
                     if attempt == 3:
                         raise
                     await asyncio.sleep(1.5 * (attempt + 1))
                     continue
                 if r.status_code in (429, 500, 502, 503, 504) and attempt < 3:
-                    await asyncio.sleep(2 * (attempt + 1))
+                    wait = r.headers.get("Retry-After", "")
+                    await asyncio.sleep(min(int(wait), 60) if wait.isdigit() else 2 * (attempt + 1))
                     continue
                 return r
 
@@ -262,10 +281,134 @@ class Client:
                             descriptionHtml=body if self.d else None, descriptionText=_text(body) if self.d else None))
         return out
 
+    # ---- Workday ----------------------------------------------------------------------------------------------
+    # Career sites call https://{tenant}.{wdN}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs themselves. Workday
+    # returns `total` only on the first page (0 afterwards), serves at most 2000 postings (offsets past the end
+    # answer with the first page again) and rejects limit > 20 and requests without `Accept: application/json`.
+    WD_PAGE = 20
+    WD_CAP = 2000
+
+    @staticmethod
+    def _wd_split(slug: str) -> tuple[str, str, str]:
+        hostpart, _, site = slug.partition("/")
+        return hostpart.split(".")[0], site, f"https://{hostpart}.myworkdayjobs.com"
+
+    def _wd_sem(self, base: str) -> asyncio.Semaphore:
+        return self.wd_sems.setdefault(base, asyncio.Semaphore(4))
+
+    async def _wd_allowed(self, base: str, site: str) -> bool:
+        """The tenant's robots.txt must allow the public career site path (its sitemap lists the same jobs)."""
+        if base not in self.wd_robots:
+            rp = None
+            try:
+                r = await self.get(f"{base}/robots.txt")
+                if r.status_code == 200:
+                    rp = RobotFileParser()
+                    rp.parse(r.text.splitlines())
+            except httpx.HTTPError:
+                pass
+            self.wd_robots[base] = rp
+        rp = self.wd_robots[base]
+        return rp is None or (rp.can_fetch("*", f"/{site}/") and rp.can_fetch("*", f"/wday/cxs/{site}/jobs"))
+
+    @staticmethod
+    def _wd_posted(text: str | None, today: datetime) -> tuple[str | None, int | None]:
+        """'Posted 3 Days Ago' -> ('2026-10-15', None); 'Posted 30+ Days Ago' -> (None, 30): only a lower bound."""
+        t = (text or "").lower()
+        if "today" in t:
+            return today.date().isoformat(), None
+        if "yesterday" in t:
+            return (today - timedelta(days=1)).date().isoformat(), None
+        m = re.search(r"(\d+)(\+?)\s*day", t)
+        if m:
+            if m.group(2):
+                return None, int(m.group(1))
+            return (today - timedelta(days=int(m.group(1)))).date().isoformat(), None
+        return None, None
+
+    async def workday(self, slug):
+        tenant, site, base = self._wd_split(slug)
+        if not site:
+            return None
+        if not await self._wd_allowed(base, site):
+            log.warning("workday %s: robots.txt disallows /%s/, skipped", tenant, site)
+            return None
+        api = f"{base}/wday/cxs/{tenant}/{site}"
+        today = datetime.now(timezone.utc)
+        items, seen, offset, total = [], set(), 0, None
+        while True:
+            r = await self.request("POST", f"{api}/jobs", host_sem=self._wd_sem(base),
+                                   headers={"Accept": "application/json"},
+                                   json={"appliedFacets": {}, "limit": self.WD_PAGE, "offset": offset, "searchText": ""})
+            if r.status_code != 200:
+                if offset == 0:
+                    return None
+                log.warning("workday %s/%s: HTTP %s at offset %s, keeping %s postings", tenant, site, r.status_code, offset, len(items))
+                break
+            d = r.json()
+            if total is None:
+                total = d.get("total") or 0
+            page = [p for p in d.get("jobPostings") or [] if p.get("externalPath") and p["externalPath"] not in seen]
+            if not page:
+                break
+            seen.update(p["externalPath"] for p in page)
+            items += page
+            offset += self.WD_PAGE
+            if offset >= min(total, self.WD_CAP):
+                break
+            if self.wd_limit and len(items) >= self.wd_limit:
+                break
+        if self.wd_limit and len(items) >= self.wd_limit:
+            pass  # stopped early on purpose: the run only wants the first wd_limit jobs
+        elif total and total >= self.WD_CAP:
+            log.warning("workday %s/%s: reports %s postings; Workday serves at most %s per query, returning %s",
+                        tenant, site, total, self.WD_CAP, len(items))
+        elif total and len(items) < total:
+            log.warning("workday %s/%s: got %s of %s postings", tenant, site, len(items), total)
+        out = []
+        for p in items:
+            path = p["externalPath"]
+            pub, older = self._wd_posted(p.get("postedOn"), today)
+            url = f"{base}/{site}{path}"
+            row = _row(company=tenant, ats="workday", boardSlug=slug, title=p.get("title"), location=p.get("locationsText"),
+                       jobId=(p.get("bulletFields") or [None])[0] or path.rsplit("_", 1)[-1],
+                       url=url, applyUrl=url, publishedAt=pub)
+            row["_olderThanDays"] = older  # postedOn only says '30+ days': lets postedWithinDays still drop it
+            out.append(row)
+        return out
+
+    async def _wd_detail(self, r: dict) -> None:
+        tenant, site, base = self._wd_split(r["boardSlug"])
+        path = r["url"].removeprefix(f"{base}/{site}")
+        x = await self.request("GET", f"{base}/wday/cxs/{tenant}/{site}{path}", host_sem=self._wd_sem(base),
+                               headers={"Accept": "application/json"})
+        if x.status_code != 200:
+            return
+        i = x.json().get("jobPostingInfo") or {}
+        body = i.get("jobDescription")
+        locs = [l for l in [i.get("location"), *(i.get("additionalLocations") or [])] if l]
+        country = (i.get("jobRequisitionLocation") or {}).get("country") or i.get("country") or {}
+        remote_type = i.get("remoteType")
+        r.update(title=i.get("title") or r["title"], jobId=i.get("jobReqId") or r["jobId"], location=locs[0] if locs else r["location"],
+                 allLocations=locs or None, country=country.get("alpha2Code") or country.get("descriptor"),
+                 employmentType=i.get("timeType"), workplaceType=remote_type,
+                 remote=("remote" in remote_type.lower()) if remote_type else None,
+                 publishedAt=i.get("startDate") or r["publishedAt"], url=i.get("externalUrl") or r["url"])
+        r["applyUrl"] = r["url"]
+        r["_olderThanDays"] = None
+        if self.d and body:
+            r["descriptionHtml"], r["descriptionText"] = body, _text(body)
+        r["_detailed"] = True
+
+    async def workday_details(self, rows: list[dict]) -> None:
+        """Postings are listed without text or full locations; one GET per posting that survived the filters."""
+        await asyncio.gather(*(self._wd_detail(r) for r in rows if r["ats"] == "workday" and not r.get("_detailed")))
+
     async def enrich(self, rows: list[dict]) -> None:
         """SmartRecruiters lists postings without text; fetch it only for the rows that survived the filters."""
         if not self.d:
             return
+        await self.workday_details(rows)
 
         async def one(r):
             x = await self.get(f"https://api.smartrecruiters.com/v1/companies/{r['boardSlug']}/postings/{r['jobId']}")
