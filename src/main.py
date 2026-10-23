@@ -17,6 +17,9 @@ def _keep(row: dict, f: dict) -> bool:
     if f["remote"] and not (row["remote"] or "remote" in (row["location"] or "").lower()
                             or (row["workplaceType"] or "").lower() == "remote"):
         return False
+    if (f["since"] and row.get("_olderThanDays") and row["publishedAt"] is None
+            and datetime.now(timezone.utc) - timedelta(days=row["_olderThanDays"]) < f["since"]):
+        return False  # Workday only says '30+ days ago' and gives no date
     if f["since"] and row["publishedAt"]:
         try:
             ts = datetime.fromisoformat(re.sub(r"Z$", "+00:00", row["publishedAt"]))
@@ -65,6 +68,8 @@ async def main() -> None:
         only = [a for a in inp.get("atsSystems") or [] if a in ATS]
         seen_store = await Actor.open_key_value_store(name="ats-jobs-seen") if only_new else None
         client = Client(descriptions=inp.get("includeDescription", True))
+        if per_company and not (f["titles"] or f["locations"] or f["remote"] or f["since"]):
+            client.wd_limit = per_company  # rows come out in page order, so the first pages already hold the kept jobs
         stats = {"companies": len(targets), "found": 0, "jobs": 0, "filtered": 0, "alreadySeen": 0, "notFound": []}
         sem = asyncio.Semaphore(4)
 
@@ -80,6 +85,9 @@ async def main() -> None:
                 await Actor.push_data({"input": t, "error": err})  # no charge event
                 return
             stats["found"] += 1
+            if f["locations"]:  # Workday lists multi-location postings as '3 Locations': get the real ones first
+                await client.workday_details([r for r in rows if r["ats"] == "workday" and (r["location"] or "").endswith("Locations")
+                                              and (not f["titles"] or any(k in (r["title"] or "").lower() for k in f["titles"]))])
             kept = [r for r in rows if _keep(r, f)]
             stats["filtered"] += len(rows) - len(kept)
             if per_company:
@@ -99,6 +107,8 @@ async def main() -> None:
             await client.enrich(kept)
             for r in kept:
                 r["input"] = t
+                r.pop("_olderThanDays", None)
+                r.pop("_detailed", None)
                 r["scrapedAt"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
             for i in range(0, len(kept), 500):
                 await Actor.push_data(kept[i:i + 500], charged_event_name="job")
