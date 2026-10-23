@@ -1,7 +1,7 @@
 {
   "actorSpecification": 1,
   "name": "ats-jobs-api",
-  "title": "Company Jobs API: Greenhouse, Lever, Ashby & 4 more",
+  "title": "Company Jobs API: Workday, Greenhouse, Lever & 5 more",
   "version": "0.1",
   "buildTag": "latest",
   "input": "./input_schema.json",
