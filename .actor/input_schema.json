@@ -7,7 +7,7 @@
       "title": "Companies",
       "type": "array",
       "editor": "stringList",
-      "description": "One per line: a careers page URL (boards.greenhouse.io/stripe, jobs.lever.co/spotify, jobs.ashbyhq.com/notion, apply.workable.com/huggingface, jobs.smartrecruiters.com/BoschGroup, acme.recruitee.com, acme.jobs.personio.de), a domain (notion.so) or a company name (Stripe). URLs are exact; domains and names are matched by trying the company's slug on every supported ATS.",
+      "description": "One per line: a careers page URL (boards.greenhouse.io/stripe, jobs.lever.co/spotify, jobs.ashbyhq.com/notion, apply.workable.com/huggingface, jobs.smartrecruiters.com/BoschGroup, acme.recruitee.com, acme.jobs.personio.de, nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite), a domain (notion.so) or a company name (Stripe). URLs are exact; domains and names are matched by trying the company's slug on every supported ATS except Workday, which needs its careers URL.",
       "prefill": [
         "https://boards.greenhouse.io/stripe",
         "notion.so",
@@ -86,7 +86,7 @@
           "personio"
         ]
       },
-      "description": "Limit auto-detection to some systems. Empty tries all seven. Ignored for careers page URLs.",
+      "description": "Limit auto-detection to some systems. Empty tries all seven. Ignored for careers page URLs (Workday is URL-only).",
       "default": []
     }
   },
