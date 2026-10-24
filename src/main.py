@@ -1,5 +1,7 @@
 import asyncio
+import json
 import re
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from apify import Actor
@@ -32,10 +34,46 @@ def _keep(row: dict, f: dict) -> bool:
     return True
 
 
+_DIR_FILE = Path(__file__).with_name("workday_directory.json")
+_SUFFIX = re.compile(r"\b(inc|incorporated|corp|corporation|co|company|llc|ltd|limited|plc|gmbh|ag|sa|group|holdings|the)\b")
+
+
+def _norm(s: str) -> str:
+    s = s.lower().replace("&", " and ")
+    s = _SUFFIX.sub(" ", s)
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+_index: dict | None = None
+
+
+def workday_board(raw: str) -> dict | None:
+    """Bare company name -> its Workday board from the directory (exact name, tenant id or alias only:
+    a fuzzy hit could shadow the same company's Greenhouse or Lever board)."""
+    global _index
+    if _index is None:
+        _index = {}
+        try:
+            entries = json.loads(_DIR_FILE.read_text("utf8"))
+        except (OSError, ValueError):
+            entries = []
+        for e in entries:
+            for k in {_norm(e["n"]), _norm(e["t"]), *(_norm(a) for a in e.get("a", []))}:
+                if k:
+                    _index.setdefault(k, e)
+    key = _norm(raw)
+    return _index.get(key) if key else None
+
+
 async def resolve(client: Client, raw: str, only: list[str]) -> tuple[list[dict], str]:
     ats, slugs = parse_target(raw)
+    entry = workday_board(raw) if not ats and (not only or "workday" in only) else None
+    if entry:
+        ats, slugs = parse_target(entry["u"])
     if ats:
         rows = await client.fetch(ats, slugs[0])
+        for row in (rows if entry else None) or []:
+            row["company"] = entry["n"]  # the board only knows its tenant id (mtb, not M&T Bank)
         return (rows or []), ("" if rows is not None else f"No public {ats} job board for '{slugs[0]}'")
     systems = only or ATS
     for slug in slugs:
