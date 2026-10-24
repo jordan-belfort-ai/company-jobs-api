@@ -16,7 +16,8 @@ you only pay for jobs you haven't seen before.
   requests at a time per company, and only where the site's robots.txt allows it). No browser, no proxies, no logins, nothing scraped against anyone's terms. That's why runs
   are fast (a 700-job board in a few seconds) and don't break when a careers page is redesigned.
 - **Name or domain in, jobs out:** `notion.so` or `Stripe` works; the Actor tries the company's slug on seven
-  systems. Careers page URLs are exact and skip the guessing.
+  systems, and 1,447 Workday companies (`Walmart`, `M&T Bank`, `NVIDIA`) are built in by name. Careers page URLs
+  are exact and skip the guessing.
 - **Monitor mode:** turn on *Only new jobs*, schedule it daily, and each run returns just the postings that appeared
   since the last one. Hiring signals for sales, recruiting and market research, at a fraction of the cost.
 - **Filters before you pay:** title keywords, location keywords, remote only, posted within N days, max per company.
@@ -48,8 +49,9 @@ Supported careers page URLs: `boards.greenhouse.io/<co>`, `job-boards.greenhouse
 `jobs.eu.lever.co/<co>`, `jobs.ashbyhq.com/<co>`, `apply.workable.com/<co>`, `jobs.smartrecruiters.com/<Co>`,
 `<co>.recruitee.com`, `<co>.jobs.personio.de`, and Workday career sites such as
 `https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite` (with or without a locale like `/en-US/`).
-Workday needs the full careers URL: its company, data-centre host (`wd1`, `wd5`...) and site name can't be guessed
-from a name.
+For Workday, a name works if the company is among the 1,447 built in (each board checked live); for any other
+Workday company, paste the careers URL, because its data-centre host (`wd1`, `wd5`...) and site name can't be
+guessed.
 
 ## Output
 
@@ -130,9 +132,9 @@ and monitor mode, so you don't write and maintain eight clients.
 
 ### How do I find which ATS a company uses?
 
-Pass the company name or domain and the Actor tries the company's slug on seven systems (all but Workday) and
-returns the board it found in the `ats` and `boardSlug` fields. Workday needs the careers page URL, because its
-host and site name can't be guessed. Companies it can't find cost nothing.
+Pass the company name or domain and the Actor tries the company's slug on seven systems and its directory of
+1,447 Workday companies, and returns the board it found in the `ats` and `boardSlug` fields. Workday companies
+outside the directory need the careers page URL. Companies it can't find cost nothing.
 
 ### What's the difference from a LinkedIn or Indeed jobs scraper?
 
