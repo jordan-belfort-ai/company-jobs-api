@@ -166,3 +166,9 @@ The ATS feeds are free if you write the clients. This Actor charges $0.001 per j
 - iCIMS, Taleo, SuccessFactors and other enterprise ATS aren't covered yet.
 - Built and maintained by Jordan Belfort. Issues and requests:
   the Actor's Issues tab.
+
+## Agent skill
+
+A ready-made skill for Claude Code, OpenClaw and other SKILL.md agents lives in [`skills/company-careers-jobs`](skills/company-careers-jobs/SKILL.md). Install it with:
+
+    npx skills add jordan-belfort-ai/company-jobs-api
